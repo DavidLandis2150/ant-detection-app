@@ -8,7 +8,7 @@ import matplotlib.patches as patches
 import tempfile
 import io
 import base64
-from PIL import Image
+import os  # Add this line from PIL import Image
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import accuracy_score, classification_report
