@@ -1210,18 +1210,18 @@ def main():
                 
                 model_name = st.text_input("Model Name", "random_forest_ant_detector.pkl")
                 
-                if st.button("Download Model"):
-                    model_buffer = st.session_state.detector.save_model_to_bytes()
-                    if model_buffer:
-                        st.download_button(
-                            label="📥 Download Trained Model",
-                            data=model_buffer.getvalue(),
-                            file_name=model_name,
-                            mime="application/octet-stream"
-                        )
-                        st.success("Model ready for download! Share this file with your team.")
-                    else:
-                        st.error("Failed to prepare model for download.")
+                # Directly prepare the model for download without a button click
+                model_buffer = st.session_state.detector.save_model_to_bytes()
+                if model_buffer:
+                    st.download_button(
+                        label="📥 Download Trained Model",
+                        data=model_buffer.getvalue(),
+                        file_name=model_name,
+                        mime="application/octet-stream"
+                    )
+                    st.success("Model ready for download! Click the button above to save.")
+                else:
+                    st.error("Failed to prepare model for download.")
 
     # 4) PREDICTION
     elif app_mode == "Prediction":
