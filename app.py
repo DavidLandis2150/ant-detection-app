@@ -8,6 +8,7 @@ import matplotlib.patches as patches
 import tempfile
 import io
 import base64
+import pandas as pd
 import os  # Add this line from PIL import Image
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import GridSearchCV
@@ -1298,6 +1299,12 @@ def main():
                 st.session_state.detector.original_filename = pred_image.name
                 st.image(st.session_state.detector.image, caption="Image for Detection", use_column_width=True)
                 
+                # Clean up the temporary file
+                try:
+                    os.unlink(temp_filename)
+                except:
+                    pass
+                
                 if st.session_state.detector.model is not None:
                     if st.button("Detect Ants"):
                         with st.spinner("Running Random Forest detection..."):
@@ -1342,12 +1349,16 @@ def main():
                                     
                                     # Results table
                                     st.subheader(f"Detection Results: {len(boxes)} Ants Found")
-                                    results_df = {
-                                        "Detection #": list(range(1, len(boxes) + 1)),
-                                        "Confidence": [f"{s:.3f}" for s in scores],
-                                        "Position (x1,y1,x2,y2)": [f"({int(b[0])}, {int(b[1])}, {int(b[2])}, {int(b[3])})" for b in boxes],
-                                        "Width × Height": [f"{int(b[2] - b[0])} × {int(b[3] - b[1])}" for b in boxes]
-                                    }
+                                    results_data = []
+                                    for i, (box, score) in enumerate(zip(boxes, scores)):
+                                        results_data.append({
+                                            "Detection #": i + 1,
+                                            "Confidence": f"{score:.3f}",
+                                            "Position (x1,y1,x2,y2)": f"({int(box[0])}, {int(box[1])}, {int(box[2])}, {int(box[3])})",
+                                            "Width × Height": f"{int(box[2] - box[0])} × {int(box[3] - box[1])}"
+                                        })
+                                    
+                                    results_df = pd.DataFrame(results_data)
                                     st.dataframe(results_df)
                                     
                                     # Show all detections if requested
@@ -1356,10 +1367,10 @@ def main():
                                         
                                         # Visualize all detections
                                         all_boxes = [det['bbox'] for det in all_detections]
-                                        all_scores = [det['score'] for det in all_detections]
+                                        all_scores_list = [det['score'] for det in all_detections]
                                         
                                         vis_image_all = st.session_state.detector.visualize_predictions(
-                                            image, all_boxes, all_scores,
+                                            image, all_boxes, all_scores_list,
                                             min_score=confidence_threshold,
                                             color=(0, 255, 0),  # Green for all detections
                                             thickness=1
@@ -1410,6 +1421,13 @@ def main():
                                 st.error(traceback.format_exc())
                 else:
                     st.warning("Please load a model first.")
+            else:
+                st.error("Failed to load image.")
+                # Clean up the temporary file even if loading failed
+                try:
+                    os.unlink(temp_filename)
+                except:
+                    pass
         
         # Help information
         with st.expander("🔍 Detection Tips for Best Results"):
