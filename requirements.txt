@@ -6,3 +6,4 @@ matplotlib>=3.8.0
 Pillow>=10.3.0
 streamlit-drawable-canvas==0.9.3
 scikit-image>=0.22.0
+pandas>=2.0.0
