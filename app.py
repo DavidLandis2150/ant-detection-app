@@ -819,52 +819,37 @@ if 'model_trained' not in st.session_state:
     st.session_state.model_trained = False
 
 # ---------------------------
-# Annotation Interface (UPDATED VERSION)
+# Annotation Interface (Same as before)
 # ---------------------------
 def annotation_interface():
     if st.session_state.detector.image is None:
         st.warning("Please upload an image first.")
         return []
     
-    # Ensure we have a valid image
-    try:
-        if isinstance(st.session_state.detector.image, np.ndarray):
-            pil_image = Image.fromarray(st.session_state.detector.image).convert("RGB")
-        else:
-            pil_image = st.session_state.detector.image.convert("RGB")
-        
-        img_width, img_height = pil_image.size
-        
-        # Debug info
-        st.write(f"Image loaded: {img_width}x{img_height} pixels")
-        
-    except Exception as e:
-        st.error(f"Error processing image: {e}")
-        return []
+    if isinstance(st.session_state.detector.image, np.ndarray):
+        pil_image = Image.fromarray(st.session_state.detector.image).convert("RGB")
+    else:
+        pil_image = st.session_state.detector.image.convert("RGB")
+    
+    img_width, img_height = pil_image.size
     
     st.markdown("""<style>.canvas-container { overflow-x: auto; }</style>""", unsafe_allow_html=True)
     st.markdown('<div class="canvas-container">', unsafe_allow_html=True)
     
-    try:
-        canvas_result = st_canvas(
-            fill_color="rgba(255, 165, 0, 0.3)",
-            stroke_width=2,
-            stroke_color="#FFA500",
-            background_image=pil_image,
-            height=img_height,
-            width=img_width,
-            drawing_mode="rect",
-            key="annotation_canvas",
-            update_streamlit=True
-        )
-    except Exception as e:
-        st.error(f"Canvas error: {e}")
-        st.markdown('</div>', unsafe_allow_html=True)
-        return []
+    canvas_result = st_canvas(
+        fill_color="rgba(255, 165, 0, 0.3)",
+        stroke_width=2,
+        stroke_color="#FFA500",
+        background_image=pil_image,
+        height=img_height,
+        width=img_width,
+        drawing_mode="rect",
+        key="annotation_canvas",
+        update_streamlit=True
+    )
     
     st.markdown('</div>', unsafe_allow_html=True)
     
-    # Process canvas annotations
     if canvas_result.json_data is not None and "objects" in canvas_result.json_data:
         objects = canvas_result.json_data["objects"]
         st.session_state.canvas_annotations = []
@@ -881,14 +866,10 @@ def annotation_interface():
         
         st.session_state.detector.annotations = st.session_state.canvas_annotations
     
-    # Show current annotations count
     if st.session_state.detector.annotations:
-        st.info(f"Current annotations: {len(st.session_state.detector.annotations)} bounding boxes")
-        
-        # Download button for annotations
         fname, json_data = st.session_state.detector.save_annotations_to_file()
         st.download_button(
-            label="📥 Download Annotations", 
+            label="Download Annotations", 
             data=json_data, 
             file_name=fname, 
             mime="application/json"
