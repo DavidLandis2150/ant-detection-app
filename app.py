@@ -8,8 +8,9 @@ import matplotlib.patches as patches
 import tempfile
 import io
 import base64
+import os
 import pandas as pd
-import os  # Add this line from PIL import Image
+from PIL import Image
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.model_selection import GridSearchCV
 from sklearn.metrics import accuracy_score, classification_report
@@ -18,6 +19,7 @@ from skimage.filters import gabor
 from streamlit_drawable_canvas import st_canvas
 import warnings
 warnings.filterwarnings('ignore')
+
 
 # ---------------------------
 # Streamlit Setup & Monkey-Patch
