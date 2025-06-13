@@ -20,11 +20,6 @@ from streamlit_drawable_canvas import st_canvas
 import warnings
 warnings.filterwarnings('ignore')
 
-# ---------------------------
-# Streamlit Setup & Monkey-Patch
-# ---------------------------
-st.set_page_config(page_title="Random Forest Ant Detection System", layout="wide")
-
 # Monkey-patch: add missing image_to_url function for drawable canvas
 import streamlit.elements.image as st_image
 def image_to_url(img, *args, **kwargs):
@@ -33,6 +28,11 @@ def image_to_url(img, *args, **kwargs):
     img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
     return f"data:image/png;base64,{img_str}"
 st_image.image_to_url = image_to_url
+
+# ---------------------------
+# Streamlit Setup & Monkey-Patch
+# ---------------------------
+st.set_page_config(page_title="Random Forest Ant Detection System", layout="wide")
 
 # ---------------------------
 # Global Folders Setup
@@ -819,23 +819,29 @@ if 'model_trained' not in st.session_state:
     st.session_state.model_trained = False
 
 # ---------------------------
-# Annotation Interface (Same as before)
+# Alternative Annotation Interface (Try this version)
 # ---------------------------
 def annotation_interface():
     if st.session_state.detector.image is None:
         st.warning("Please upload an image first.")
         return []
     
+    # Force convert to PIL image
     if isinstance(st.session_state.detector.image, np.ndarray):
-        pil_image = Image.fromarray(st.session_state.detector.image).convert("RGB")
+        # Ensure the image is in the right format
+        img_array = st.session_state.detector.image.copy()
+        if img_array.dtype != np.uint8:
+            img_array = (img_array * 255).astype(np.uint8) if img_array.max() <= 1.0 else img_array.astype(np.uint8)
+        pil_image = Image.fromarray(img_array, mode="RGB")
     else:
         pil_image = st.session_state.detector.image.convert("RGB")
     
     img_width, img_height = pil_image.size
     
-    st.markdown("""<style>.canvas-container { overflow-x: auto; }</style>""", unsafe_allow_html=True)
-    st.markdown('<div class="canvas-container">', unsafe_allow_html=True)
+    # Debug: Show that we have the image
+    st.write(f"Canvas will be: {img_width} x {img_height} pixels")
     
+    # Try a different approach with explicit styling
     canvas_result = st_canvas(
         fill_color="rgba(255, 165, 0, 0.3)",
         stroke_width=2,
@@ -848,8 +854,7 @@ def annotation_interface():
         update_streamlit=True
     )
     
-    st.markdown('</div>', unsafe_allow_html=True)
-    
+    # Process the canvas result
     if canvas_result.json_data is not None and "objects" in canvas_result.json_data:
         objects = canvas_result.json_data["objects"]
         st.session_state.canvas_annotations = []
@@ -866,6 +871,7 @@ def annotation_interface():
         
         st.session_state.detector.annotations = st.session_state.canvas_annotations
     
+    # Download button
     if st.session_state.detector.annotations:
         fname, json_data = st.session_state.detector.save_annotations_to_file()
         st.download_button(
