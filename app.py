@@ -37,10 +37,8 @@ st_image.image_to_url = image_to_url
 # ---------------------------
 # Global Folders Setup
 # ---------------------------
-if not os.path.exists("models"):
-    os.makedirs("models", exist_ok=True)
-if not os.path.exists("training_data"):
-    os.makedirs("training_data", exist_ok=True)
+os.makedirs("models", exist_ok=True)
+os.makedirs("training_data", exist_ok=True)
 
 # ---------------------------
 # Random Forest Ant Detector Class
@@ -288,81 +286,247 @@ class RandomForestAntDetector:
         
         return np.array(X_features), np.array(y_labels)
 
-    def train_model(self, images, annotations, tune_hyperparameters=True):
-        """
-        Train the Random Forest model
+   def train_model(self, images, annotations, tune_hyperparameters=True):
+    """
+    Train the Random Forest model with better error handling and progress tracking
+    """
+    try:
+        st.write("🔄 Starting feature extraction from training images...")
         
-        Args:
-            images: List of images
-            annotations: List of annotation lists
-            tune_hyperparameters: Whether to perform hyperparameter tuning
+        # Add progress tracking for feature extraction
+        progress_bar = st.progress(0)
+        status_text = st.empty()
+        
+        # Extract features with progress tracking
+        X_features = []
+        y_labels = []
+        
+        total_images = len(images)
+        
+        for img_idx, (image, img_annotations) in enumerate(zip(images, annotations)):
+            # Update progress
+            progress = img_idx / total_images
+            progress_bar.progress(progress)
+            status_text.text(f"Processing image {img_idx + 1}/{total_images}...")
             
-        Returns:
-            Training results
-        """
-        st.write("Extracting features from training images...")
-        X, y = self.extract_patches_and_labels(images, annotations)
+            try:
+                h, w = image.shape[:2]
+                
+                # Convert annotations to pixel coordinates
+                ant_boxes = []
+                for ann in img_annotations:
+                    x1, y1, x2, y2 = ann['bbox']
+                    # Convert from normalized to pixel coordinates
+                    x1 = int(x1 * w)
+                    y1 = int(y1 * h)
+                    x2 = int(x2 * w)
+                    y2 = int(y2 * h)
+                    ant_boxes.append([x1, y1, x2, y2])
+                
+                # Extract positive samples (ants) with error handling
+                positive_count = 0
+                for box in ant_boxes:
+                    x1, y1, x2, y2 = box
+                    
+                    # Extract multiple patches around the ant for data augmentation
+                    ant_center_x = (x1 + x2) // 2
+                    ant_center_y = (y1 + y2) // 2
+                    
+                    # Extract patches at different positions around the ant
+                    for offset_x in [-4, 0, 4]:
+                        for offset_y in [-4, 0, 4]:
+                            try:
+                                patch_x = max(0, min(w - self.patch_size[0], 
+                                               ant_center_x - self.patch_size[0]//2 + offset_x))
+                                patch_y = max(0, min(h - self.patch_size[1], 
+                                               ant_center_y - self.patch_size[1]//2 + offset_y))
+                                
+                                patch = image[patch_y:patch_y + self.patch_size[1], 
+                                            patch_x:patch_x + self.patch_size[0]]
+                                
+                                if patch.shape[:2] == self.patch_size:
+                                    features = self.extract_features(patch)
+                                    if len(features) > 0:
+                                        X_features.append(features)
+                                        y_labels.append(1)  # Ant
+                                        positive_count += 1
+                            except Exception as e:
+                                st.warning(f"Error extracting positive patch: {e}")
+                                continue
+                
+                # Extract negative samples (background) with error handling
+                negative_target = max(positive_count * 3, 50)  # Ensure minimum negatives
+                negative_count = 0
+                attempts = 0
+                max_attempts = negative_target * 10
+                
+                while negative_count < negative_target and attempts < max_attempts:
+                    attempts += 1
+                    
+                    try:
+                        # Random location
+                        rand_x = np.random.randint(0, max(1, w - self.patch_size[0]))
+                        rand_y = np.random.randint(0, max(1, h - self.patch_size[1]))
+                        
+                        # Check if this patch overlaps with any ant
+                        patch_center_x = rand_x + self.patch_size[0] // 2
+                        patch_center_y = rand_y + self.patch_size[1] // 2
+                        
+                        is_ant = False
+                        for box in ant_boxes:
+                            bx1, by1, bx2, by2 = box
+                            if bx1 <= patch_center_x <= bx2 and by1 <= patch_center_y <= by2:
+                                is_ant = True
+                                break
+                        
+                        if not is_ant:
+                            patch = image[rand_y:rand_y + self.patch_size[1], 
+                                        rand_x:rand_x + self.patch_size[0]]
+                            
+                            if patch.shape[:2] == self.patch_size:
+                                features = self.extract_features(patch)
+                                if len(features) > 0:
+                                    X_features.append(features)
+                                    y_labels.append(0)  # Background
+                                    negative_count += 1
+                    except Exception as e:
+                        st.warning(f"Error extracting negative patch: {e}")
+                        continue
+                
+                st.write(f"  ✅ Image {img_idx + 1}: {positive_count} positive, {negative_count} negative samples")
+                
+            except Exception as e:
+                st.error(f"❌ Error processing image {img_idx + 1}: {e}")
+                continue
         
-        if len(X) == 0:
-            raise ValueError("No training samples extracted")
+        # Clear progress indicators
+        progress_bar.empty()
+        status_text.empty()
         
-        st.write(f"Total training samples: {len(X)} (Positive: {np.sum(y)}, Negative: {np.sum(y == 0)})")
-        st.write(f"Feature vector size: {X.shape[1]}")
+        # Convert to numpy arrays
+        if not X_features:
+            raise ValueError("❌ No training samples extracted! Check your annotations and images.")
         
-        # Hyperparameter tuning
+        X = np.array(X_features)
+        y = np.array(y_labels)
+        
+        st.success(f"✅ Feature extraction complete!")
+        st.write(f"📊 Total training samples: {len(X)} (Positive: {np.sum(y)}, Negative: {np.sum(y == 0)})")
+        st.write(f"🔢 Feature vector size: {X.shape[1]}")
+        
+        # Check for class imbalance
+        pos_ratio = np.sum(y) / len(y)
+        if pos_ratio < 0.1 or pos_ratio > 0.9:
+            st.warning(f"⚠️ Class imbalance detected: {pos_ratio:.1%} positive samples. Consider adjusting your annotations.")
+        
+        # Hyperparameter tuning with progress tracking
+        st.write("🔄 Training Random Forest model...")
+        
         if tune_hyperparameters:
-            st.write("Tuning hyperparameters...")
-            param_grid = {
-                'n_estimators': [50, 100, 200],
-                'max_depth': [None, 10, 20, 30],
-                'min_samples_split': [2, 5, 10],
-                'min_samples_leaf': [1, 2, 4]
-            }
+            st.write("🎛️ Tuning hyperparameters...")
             
-            # Use a smaller grid for quick tuning if dataset is small
-            if len(X) < 1000:
+            # Adjust parameter grid based on dataset size
+            if len(X) < 500:
                 param_grid = {
                     'n_estimators': [50, 100],
                     'max_depth': [None, 20],
                     'min_samples_split': [2, 5],
                     'min_samples_leaf': [1, 2]
                 }
+                st.info("Using smaller parameter grid for small dataset")
+            elif len(X) < 2000:
+                param_grid = {
+                    'n_estimators': [50, 100, 150],
+                    'max_depth': [None, 10, 20],
+                    'min_samples_split': [2, 5],
+                    'min_samples_leaf': [1, 2]
+                }
+            else:
+                param_grid = {
+                    'n_estimators': [50, 100, 200],
+                    'max_depth': [None, 10, 20, 30],
+                    'min_samples_split': [2, 5, 10],
+                    'min_samples_leaf': [1, 2, 4]
+                }
             
-            rf = RandomForestClassifier(random_state=42)
+            rf = RandomForestClassifier(random_state=42, n_jobs=-1)
+            
+            # Use appropriate cross-validation
+            cv_folds = min(5, max(2, len(X) // 50))
+            st.write(f"Using {cv_folds}-fold cross-validation")
+            
             grid_search = GridSearchCV(
-                rf, param_grid, cv=min(3, len(X)//10), 
-                scoring='f1', n_jobs=-1, verbose=1
+                rf, param_grid, 
+                cv=cv_folds, 
+                scoring='f1', 
+                n_jobs=-1, 
+                verbose=0  # Reduce verbosity
             )
             
-            grid_search.fit(X, y)
+            # Train with progress indication
+            with st.spinner("Training and tuning hyperparameters..."):
+                grid_search.fit(X, y)
             
             self.model = grid_search.best_estimator_
             best_params = grid_search.best_params_
             best_score = grid_search.best_score_
             
-            st.write(f"Best parameters: {best_params}")
-            st.write(f"Best cross-validation F1 score: {best_score:.3f}")
+            st.success(f"✅ Best parameters found!")
+            st.write(f"🏆 Best parameters: {best_params}")
+            st.write(f"📈 Best cross-validation F1 score: {best_score:.3f}")
             
         else:
             # Train with default parameters
-            self.model = RandomForestClassifier(**self.rf_params)
-            self.model.fit(X, y)
+            st.write("🚀 Training with default parameters...")
+            self.model = RandomForestClassifier(**self.rf_params, n_jobs=-1)
+            
+            with st.spinner("Training Random Forest..."):
+                self.model.fit(X, y)
+            
+            st.success("✅ Training completed!")
         
-        # Training accuracy
+        # Calculate training metrics
+        st.write("📊 Calculating training metrics...")
         y_pred = self.model.predict(X)
         accuracy = accuracy_score(y, y_pred)
         
-        st.write(f"Training accuracy: {accuracy:.3f}")
+        # Additional metrics
+        from sklearn.metrics import precision_score, recall_score, f1_score
+        precision = precision_score(y, y_pred, zero_division=0)
+        recall = recall_score(y, y_pred, zero_division=0)
+        f1 = f1_score(y, y_pred, zero_division=0)
+        
+        st.success(f"✅ Training completed successfully!")
+        st.write(f"🎯 Training accuracy: {accuracy:.3f}")
+        st.write(f"🎯 Precision: {precision:.3f}")
+        st.write(f"🎯 Recall: {recall:.3f}")
+        st.write(f"🎯 F1-score: {f1:.3f}")
         
         # Feature importance
         feature_importance = self.model.feature_importances_
         
         return {
             'accuracy': accuracy,
+            'precision': precision,
+            'recall': recall,
+            'f1_score': f1,
             'feature_importance': feature_importance,
             'n_samples': len(X),
-            'n_features': X.shape[1]
+            'n_features': X.shape[1],
+            'positive_samples': int(np.sum(y)),
+            'negative_samples': int(np.sum(y == 0))
         }
+        
+    except Exception as e:
+        st.error(f"❌ Training failed with error: {str(e)}")
+        import traceback
+        error_details = traceback.format_exc()
+        st.error(f"Error details: {error_details}")
+        
+        # Reset model state on failure
+        self.model = None
+        
+        raise e  # Re-raise to trigger the outer exception handler
 
     def sliding_window_detection(self, image, confidence_threshold=None):
         """
@@ -974,7 +1138,7 @@ def main():
         _ = annotation_interface()
         st.info("Draw bounding boxes around all ants in the image. Then download the annotations file for later training use.")
 
-    # 3) TRAIN MODEL
+   # 3) TRAIN MODEL
     elif app_mode == "Train Model":
         st.header("Train Random Forest Model")
 
@@ -1110,8 +1274,7 @@ def main():
                 )
                 st.session_state.detector.nms_threshold = nms_threshold
 
-        # Step D: Train Model
-        if st.session_state.data_loaded:
+            # Step D: Train Model
             st.subheader("Model Training")
             
             col1, col2 = st.columns(2)
@@ -1217,71 +1380,71 @@ def main():
                         import traceback
                         st.error(traceback.format_exc())
                         st.session_state.model_trained = False
+
+        # THIS IS THE KEY FIX - MOVED OUTSIDE THE data_loaded BLOCK!
+        # Save model option - This shows whenever a model exists, regardless of data_loaded status
+        if st.session_state.model_trained and st.session_state.detector.model is not None:
+            st.subheader("Save Trained Model")
             
-            # Save model option - MOVED OUTSIDE THE BUTTON BLOCK
-            # This will show whenever model_trained is True, not just after the button click
-            if st.session_state.model_trained and st.session_state.detector.model is not None:
-                st.subheader("Save Trained Model")
+            # Show training results if they exist
+            if hasattr(st.session_state, 'training_results'):
+                results = st.session_state.training_results
+                st.success("✅ Model training completed successfully!")
                 
-                # Show training results if they exist
-                if hasattr(st.session_state, 'training_results'):
-                    results = st.session_state.training_results
-                    st.success("✅ Model training completed successfully!")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Training Accuracy", f"{results['accuracy']:.3f}")
+                with col2:
+                    st.metric("Training Samples", results['n_samples'])
+                with col3:
+                    st.metric("Feature Vector Size", results['n_features'])
+            
+            model_name = st.text_input("Model Name", "random_forest_ant_detector.pkl")
+            
+            # Always prepare the model for download when this section shows
+            try:
+                model_buffer = st.session_state.detector.save_model_to_bytes()
+                if model_buffer:
+                    st.download_button(
+                        label="📥 Download Trained Model",
+                        data=model_buffer.getvalue(),
+                        file_name=model_name,
+                        mime="application/octet-stream",
+                        help="Download your trained Random Forest model to use for predictions"
+                    )
+                    st.success("✅ Model ready for download! Click the button above to save.")
                     
-                    col1, col2, col3 = st.columns(3)
-                    with col1:
-                        st.metric("Training Accuracy", f"{results['accuracy']:.3f}")
-                    with col2:
-                        st.metric("Training Samples", results['n_samples'])
-                    with col3:
-                        st.metric("Feature Vector Size", results['n_features'])
-                
-                model_name = st.text_input("Model Name", "random_forest_ant_detector.pkl")
-                
-                # Always prepare the model for download when this section shows
-                try:
-                    model_buffer = st.session_state.detector.save_model_to_bytes()
-                    if model_buffer:
-                        st.download_button(
-                            label="📥 Download Trained Model",
-                            data=model_buffer.getvalue(),
-                            file_name=model_name,
-                            mime="application/octet-stream",
-                            help="Download your trained Random Forest model to use for predictions"
-                        )
-                        st.success("✅ Model ready for download! Click the button above to save.")
-                        
-                        # Additional model info
-                        st.info(f"""
-                        **Model Information:**
-                        - Model type: Random Forest Classifier
-                        - Patch size: {st.session_state.detector.patch_size}
-                        - Detection scales: {st.session_state.detector.scales}
-                        - NMS threshold: {st.session_state.detector.nms_threshold}
-                        - Confidence threshold: {st.session_state.detector.confidence_threshold}
-                        
-                        This model file contains both the trained classifier and all configuration settings.
-                        """)
-                    else:
-                        st.error("❌ Failed to prepare model for download.")
-                        st.error("Please try training the model again.")
-                        
-                except Exception as e:
-                    st.error(f"❌ Error preparing model for download: {e}")
+                    # Additional model info
+                    st.info(f"""
+                    **Model Information:**
+                    - Model type: Random Forest Classifier
+                    - Patch size: {st.session_state.detector.patch_size}
+                    - Detection scales: {st.session_state.detector.scales}
+                    - NMS threshold: {st.session_state.detector.nms_threshold}
+                    - Confidence threshold: {st.session_state.detector.confidence_threshold}
+                    
+                    This model file contains both the trained classifier and all configuration settings.
+                    """)
+                else:
+                    st.error("❌ Failed to prepare model for download.")
                     st.error("Please try training the model again.")
-            
-            elif st.session_state.data_loaded and not st.session_state.model_trained:
-                st.info("💡 Train a model first to enable the download option.")
-            
-            # Debug information (you can remove this in production)
-            with st.expander("🔧 Debug Information", expanded=False):
-                st.write("**Session State Debug:**")
-                st.write(f"- model_trained: {st.session_state.model_trained}")
-                st.write(f"- data_loaded: {st.session_state.data_loaded}")
-                st.write(f"- model exists: {st.session_state.detector.model is not None}")
-                st.write(f"- training_results exists: {hasattr(st.session_state, 'training_results')}")
-                if hasattr(st.session_state, 'training_results'):
-                    st.write(f"- training accuracy: {st.session_state.training_results.get('accuracy', 'N/A')}")
+                    
+            except Exception as e:
+                st.error(f"❌ Error preparing model for download: {e}")
+                st.error("Please try training the model again.")
+        
+        elif st.session_state.data_loaded and not st.session_state.model_trained:
+            st.info("💡 Train a model first to enable the download option.")
+        
+        # Debug information (you can remove this in production)
+        with st.expander("🔧 Debug Information", expanded=False):
+            st.write("**Session State Debug:**")
+            st.write(f"- model_trained: {st.session_state.model_trained}")
+            st.write(f"- data_loaded: {st.session_state.data_loaded}")
+            st.write(f"- model exists: {st.session_state.detector.model is not None}")
+            st.write(f"- training_results exists: {hasattr(st.session_state, 'training_results')}")
+            if hasattr(st.session_state, 'training_results'):
+                st.write(f"- training accuracy: {st.session_state.training_results.get('accuracy', 'N/A')}")
 
     # 4) PREDICTION
     elif app_mode == "Prediction":
