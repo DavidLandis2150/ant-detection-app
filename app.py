@@ -1176,6 +1176,9 @@ def main():
                         st.success("Training complete!")
                         st.session_state.model_trained = True
                         
+                        # Store training results in session state for persistence
+                        st.session_state.training_results = results
+                        
                         # Display results
                         col1, col2 = st.columns(2)
                         
@@ -1213,27 +1216,72 @@ def main():
                         st.error(f"Training failed: {e}")
                         import traceback
                         st.error(traceback.format_exc())
+                        st.session_state.model_trained = False
             
-            # Save model option
-            if st.session_state.model_trained:
+            # Save model option - MOVED OUTSIDE THE BUTTON BLOCK
+            # This will show whenever model_trained is True, not just after the button click
+            if st.session_state.model_trained and st.session_state.detector.model is not None:
                 st.subheader("Save Trained Model")
+                
+                # Show training results if they exist
+                if hasattr(st.session_state, 'training_results'):
+                    results = st.session_state.training_results
+                    st.success("✅ Model training completed successfully!")
+                    
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Training Accuracy", f"{results['accuracy']:.3f}")
+                    with col2:
+                        st.metric("Training Samples", results['n_samples'])
+                    with col3:
+                        st.metric("Feature Vector Size", results['n_features'])
                 
                 model_name = st.text_input("Model Name", "random_forest_ant_detector.pkl")
                 
-                # Directly prepare the model for download without a button click
-                model_buffer = st.session_state.detector.save_model_to_bytes()
-                if model_buffer:
-                    st.download_button(
-                        label="📥 Download Trained Model",
-                        data=model_buffer.getvalue(),
-                        file_name=model_name,
-                        mime="application/octet-stream"
-                    )
-                    st.success("Model ready for download! Click the button above to save.")
-                else:
-                    st.error("Failed to prepare model for download.")
-
-# Replace the PREDICTION section (4) in your app.py with this enhanced version:
+                # Always prepare the model for download when this section shows
+                try:
+                    model_buffer = st.session_state.detector.save_model_to_bytes()
+                    if model_buffer:
+                        st.download_button(
+                            label="📥 Download Trained Model",
+                            data=model_buffer.getvalue(),
+                            file_name=model_name,
+                            mime="application/octet-stream",
+                            help="Download your trained Random Forest model to use for predictions"
+                        )
+                        st.success("✅ Model ready for download! Click the button above to save.")
+                        
+                        # Additional model info
+                        st.info(f"""
+                        **Model Information:**
+                        - Model type: Random Forest Classifier
+                        - Patch size: {st.session_state.detector.patch_size}
+                        - Detection scales: {st.session_state.detector.scales}
+                        - NMS threshold: {st.session_state.detector.nms_threshold}
+                        - Confidence threshold: {st.session_state.detector.confidence_threshold}
+                        
+                        This model file contains both the trained classifier and all configuration settings.
+                        """)
+                    else:
+                        st.error("❌ Failed to prepare model for download.")
+                        st.error("Please try training the model again.")
+                        
+                except Exception as e:
+                    st.error(f"❌ Error preparing model for download: {e}")
+                    st.error("Please try training the model again.")
+            
+            elif st.session_state.data_loaded and not st.session_state.model_trained:
+                st.info("💡 Train a model first to enable the download option.")
+            
+            # Debug information (you can remove this in production)
+            with st.expander("🔧 Debug Information", expanded=False):
+                st.write("**Session State Debug:**")
+                st.write(f"- model_trained: {st.session_state.model_trained}")
+                st.write(f"- data_loaded: {st.session_state.data_loaded}")
+                st.write(f"- model exists: {st.session_state.detector.model is not None}")
+                st.write(f"- training_results exists: {hasattr(st.session_state, 'training_results')}")
+                if hasattr(st.session_state, 'training_results'):
+                    st.write(f"- training accuracy: {st.session_state.training_results.get('accuracy', 'N/A')}")
 
     # 4) PREDICTION
     elif app_mode == "Prediction":
