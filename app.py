@@ -1233,6 +1233,8 @@ def main():
                 else:
                     st.error("Failed to prepare model for download.")
 
+# Replace the PREDICTION section (4) in your app.py with this enhanced version:
+
     # 4) PREDICTION
     elif app_mode == "Prediction":
         st.header("Random Forest Ant Detection")
@@ -1258,10 +1260,16 @@ def main():
                     else:
                         st.error("Failed to load model.")
         
-        # Image upload for prediction
-        st.subheader("Upload Image for Detection")
+        # Image upload for prediction - NOW SUPPORTS MULTIPLE FILES
+        st.subheader("Upload Images for Detection")
         
-        pred_image = st.file_uploader("Choose an Image", type=['jpg', 'jpeg', 'png'], key="pred_image")
+        pred_images = st.file_uploader(
+            "Choose Images (Multiple selection supported)", 
+            type=['jpg', 'jpeg', 'png'], 
+            key="pred_images",
+            accept_multiple_files=True,  # This enables multiple file selection
+            help="You can select multiple images for batch detection. Hold Ctrl/Cmd to select multiple files."
+        )
         
         # Detection parameters
         st.write("#### Detection Parameters")
@@ -1298,175 +1306,339 @@ def main():
             # Convert hex to RGB
             detection_color_rgb = tuple(int(detection_color[i:i+2], 16) for i in (1, 3, 5))
         
-        # Apply detection
-        if pred_image is not None:
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp_file:
-                tmp_file.write(pred_image.getvalue())
-                temp_filename = tmp_file.name
+        # Apply detection to multiple images
+        if pred_images and len(pred_images) > 0:
+            st.write(f"**{len(pred_images)} image(s) uploaded for detection**")
             
-            if st.session_state.detector.load_image(temp_filename):
-                st.session_state.detector.original_filename = pred_image.name
-                st.image(st.session_state.detector.image, caption="Image for Detection", use_column_width=True)
-                
-                # Clean up the temporary file
-                try:
-                    os.unlink(temp_filename)
-                except:
-                    pass
-                
-                if st.session_state.detector.model is not None:
-                    if st.button("Detect Ants"):
-                        with st.spinner("Running Random Forest detection..."):
-                            try:
-                                image = st.session_state.detector.image
+            # Show preview of uploaded images
+            if len(pred_images) <= 5:  # Show preview only for reasonable number of images
+                st.subheader("Image Preview")
+                cols = st.columns(min(len(pred_images), 3))
+                for i, img_file in enumerate(pred_images[:5]):  # Show max 5 previews
+                    with cols[i % 3]:
+                        image = Image.open(img_file)
+                        st.image(image, caption=img_file.name, use_column_width=True)
+            
+            if st.session_state.detector.model is not None:
+                if st.button("🔍 Detect Ants in All Images"):
+                    # Initialize results storage
+                    all_results = []
+                    batch_summary = {"total_images": len(pred_images), "total_ants": 0, "processed_images": 0}
+                    
+                    # Create progress bar for batch processing
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    
+                    with st.spinner("Processing batch detection..."):
+                        try:
+                            for img_idx, pred_image in enumerate(pred_images):
+                                # Update progress
+                                progress = (img_idx + 1) / len(pred_images)
+                                progress_bar.progress(progress)
+                                status_text.text(f"Processing image {img_idx + 1}/{len(pred_images)}: {pred_image.name}")
                                 
-                                boxes, scores, all_detections = st.session_state.detector.predict(
-                                    image, 
-                                    confidence_threshold=confidence_threshold,
-                                    nms_threshold=nms_threshold
-                                )
+                                # Load image
+                                with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as tmp_file:
+                                    tmp_file.write(pred_image.getvalue())
+                                    temp_filename = tmp_file.name
                                 
-                                if not boxes:
-                                    st.info(f"No ants detected above confidence threshold {confidence_threshold:.2f}")
+                                if st.session_state.detector.load_image(temp_filename):
+                                    st.session_state.detector.original_filename = pred_image.name
+                                    image = st.session_state.detector.image
                                     
-                                    if all_detections:
-                                        all_scores = [det['score'] for det in all_detections]
-                                        st.subheader("Detection Score Analysis")
-                                        
-                                        fig, ax = plt.subplots(figsize=(10, 4))
-                                        ax.hist(all_scores, bins=20, range=(0, 1))
-                                        ax.axvline(x=confidence_threshold, color='r', linestyle='--', 
-                                                 label=f'Threshold ({confidence_threshold})')
-                                        ax.set_xlabel("Confidence Score")
-                                        ax.set_ylabel("Number of Detections")
-                                        ax.set_title("All Detection Scores")
-                                        ax.legend()
-                                        st.pyplot(fig)
-                                        
-                                        top_scores = sorted(all_scores, reverse=True)[:10]
-                                        st.write("Top 10 scores:", [f"{s:.3f}" for s in top_scores])
-                                        st.info("💡 Try lowering the confidence threshold to include more detections.")
-                                else:
-                                    # Visualize detections
-                                    vis_image = st.session_state.detector.visualize_predictions(
-                                        image, boxes, scores, 
-                                        min_score=confidence_threshold,
-                                        color=detection_color_rgb
+                                    # Run detection
+                                    boxes, scores, all_detections = st.session_state.detector.predict(
+                                        image, 
+                                        confidence_threshold=confidence_threshold,
+                                        nms_threshold=nms_threshold
                                     )
                                     
-                                    st.image(vis_image, caption="Detection Results", use_column_width=True)
+                                    # Store results for this image
+                                    image_results = {
+                                        "image_name": pred_image.name,
+                                        "image": image,
+                                        "boxes": boxes,
+                                        "scores": scores,
+                                        "all_detections": all_detections,
+                                        "ant_count": len(boxes)
+                                    }
+                                    all_results.append(image_results)
                                     
-                                    # Results table
-                                    st.subheader(f"Detection Results: {len(boxes)} Ants Found")
-                                    results_data = []
-                                    for i, (box, score) in enumerate(zip(boxes, scores)):
-                                        results_data.append({
-                                            "Detection #": i + 1,
-                                            "Confidence": f"{score:.3f}",
-                                            "Position (x1,y1,x2,y2)": f"({int(box[0])}, {int(box[1])}, {int(box[2])}, {int(box[3])})",
-                                            "Width × Height": f"{int(box[2] - box[0])} × {int(box[3] - box[1])}"
+                                    # Update batch summary
+                                    batch_summary["total_ants"] += len(boxes)
+                                    batch_summary["processed_images"] += 1
+                                    
+                                    # Clean up temp file
+                                    try:
+                                        os.unlink(temp_filename)
+                                    except:
+                                        pass
+                                else:
+                                    st.error(f"Failed to load image: {pred_image.name}")
+                            
+                            # Clear progress indicators
+                            progress_bar.empty()
+                            status_text.empty()
+                            
+                            # Display batch summary
+                            st.success("✅ Batch processing completed!")
+                            
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                st.metric("Images Processed", batch_summary["processed_images"])
+                            with col2:
+                                st.metric("Total Ants Found", batch_summary["total_ants"])
+                            with col3:
+                                avg_ants = batch_summary["total_ants"] / max(batch_summary["processed_images"], 1)
+                                st.metric("Average Ants per Image", f"{avg_ants:.1f}")
+                            
+                            # Create comprehensive results table for download
+                            if batch_summary["total_ants"] > 0:
+                                st.subheader("📊 Detection Results")
+                                
+                                # Prepare data for comprehensive table
+                                table_data = []
+                                detection_id = 1
+                                
+                                for result in all_results:
+                                    image_name = result["image_name"]
+                                    boxes = result["boxes"]
+                                    scores = result["scores"]
+                                    
+                                    if len(boxes) == 0:
+                                        # Add row even for images with no detections
+                                        table_data.append({
+                                            "Detection_ID": f"IMG_{len(table_data)+1:03d}",
+                                            "Image_Name": image_name,
+                                            "Ant_Count": 0,
+                                            "Detection_Number": "N/A",
+                                            "Confidence_Score": "N/A",
+                                            "X1_Coordinate": "N/A",
+                                            "Y1_Coordinate": "N/A", 
+                                            "X2_Coordinate": "N/A",
+                                            "Y2_Coordinate": "N/A",
+                                            "Width_Pixels": "N/A",
+                                            "Height_Pixels": "N/A",
+                                            "Center_X": "N/A",
+                                            "Center_Y": "N/A"
                                         })
-                                    
-                                    results_df = pd.DataFrame(results_data)
-                                    st.dataframe(results_df)
-                                    
-                                    # Show all detections if requested
-                                    if show_all_detections and all_detections:
-                                        st.subheader(f"All Detections Before Overlap Removal: {len(all_detections)}")
-                                        
-                                        # Visualize all detections
-                                        all_boxes = [det['bbox'] for det in all_detections]
-                                        all_scores_list = [det['score'] for det in all_detections]
-                                        
-                                        vis_image_all = st.session_state.detector.visualize_predictions(
-                                            image, all_boxes, all_scores_list,
-                                            min_score=confidence_threshold,
-                                            color=(0, 255, 0),  # Green for all detections
-                                            thickness=1
-                                        )
-                                        
-                                        st.image(vis_image_all, caption="All Detections (Before Overlap Removal)", use_column_width=True)
-                                    
-                                    # Detection statistics
-                                    st.subheader("Detection Statistics")
-                                    col1, col2 = st.columns(2)
+                                    else:
+                                        for i, (box, score) in enumerate(zip(boxes, scores)):
+                                            x1, y1, x2, y2 = [int(coord) for coord in box]
+                                            width = x2 - x1
+                                            height = y2 - y1
+                                            center_x = x1 + width // 2
+                                            center_y = y1 + height // 2
+                                            
+                                            table_data.append({
+                                                "Detection_ID": f"DET_{detection_id:04d}",
+                                                "Image_Name": image_name,
+                                                "Ant_Count": len(boxes),
+                                                "Detection_Number": i + 1,
+                                                "Confidence_Score": f"{score:.4f}",
+                                                "X1_Coordinate": x1,
+                                                "Y1_Coordinate": y1,
+                                                "X2_Coordinate": x2,
+                                                "Y2_Coordinate": y2,
+                                                "Width_Pixels": width,
+                                                "Height_Pixels": height,
+                                                "Center_X": center_x,
+                                                "Center_Y": center_y
+                                            })
+                                            detection_id += 1
+                                
+                                # Create DataFrame and display
+                                results_df = pd.DataFrame(table_data)
+                                
+                                # Display summary table (per image)
+                                summary_data = []
+                                for result in all_results:
+                                    summary_data.append({
+                                        "Image Name": result["image_name"],
+                                        "Ants Detected": result["ant_count"],
+                                        "Avg Confidence": f"{np.mean(result['scores']):.3f}" if result['scores'] else "N/A",
+                                        "Max Confidence": f"{max(result['scores']):.3f}" if result['scores'] else "N/A",
+                                        "Min Confidence": f"{min(result['scores']):.3f}" if result['scores'] else "N/A"
+                                    })
+                                
+                                summary_df = pd.DataFrame(summary_data)
+                                st.write("**Summary by Image:**")
+                                st.dataframe(summary_df, use_container_width=True)
+                                
+                                # Provide download button for detailed results
+                                csv_buffer = io.StringIO()
+                                results_df.to_csv(csv_buffer, index=False)
+                                csv_data = csv_buffer.getvalue()
+                                
+                                st.download_button(
+                                    label="📥 Download Detailed Detection Results (CSV)",
+                                    data=csv_data,
+                                    file_name=f"ant_detection_results_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                                    mime="text/csv",
+                                    help="Download a CSV file with all detection details including coordinates, confidence scores, and image information."
+                                )
+                                
+                                # Show detailed table in app (limited rows for performance)
+                                st.write("**Detailed Detection Results** (showing first 100 rows):")
+                                st.dataframe(results_df.head(100), use_container_width=True)
+                                
+                                if len(results_df) > 100:
+                                    st.info(f"Showing first 100 of {len(results_df)} total detections. Download CSV for complete results.")
+                            
+                            # Display individual results with images
+                            st.subheader("🖼️ Individual Image Results")
+                            
+                            for idx, result in enumerate(all_results):
+                                with st.expander(f"📸 {result['image_name']} - {result['ant_count']} ants detected", expanded=(idx == 0)):
+                                    col1, col2 = st.columns([2, 1])
                                     
                                     with col1:
-                                        if boxes:
-                                            widths = [b[2] - b[0] for b in boxes]
-                                            heights = [b[3] - b[1] for b in boxes]
+                                        if result["ant_count"] > 0:
+                                            # Create visualization
+                                            vis_image = st.session_state.detector.visualize_predictions(
+                                                result["image"], 
+                                                result["boxes"], 
+                                                result["scores"],
+                                                min_score=confidence_threshold,
+                                                color=detection_color_rgb
+                                            )
+                                            st.image(vis_image, caption=f"Detections: {result['image_name']}", use_column_width=True)
                                             
-                                            st.write(f"**Size Statistics:**")
-                                            st.write(f"- Avg width: {np.mean(widths):.1f}px")
-                                            st.write(f"- Avg height: {np.mean(heights):.1f}px")
-                                            st.write(f"- Width range: {min(widths):.0f}-{max(widths):.0f}px")
-                                            st.write(f"- Height range: {min(heights):.0f}-{max(heights):.0f}px")
+                                            # Option to download individual result image
+                                            img_pil = Image.fromarray(vis_image)
+                                            img_buffer = io.BytesIO()
+                                            img_pil.save(img_buffer, format='PNG')
+                                            img_bytes = img_buffer.getvalue()
+                                            
+                                            base_name = os.path.splitext(result['image_name'])[0]
+                                            st.download_button(
+                                                label=f"💾 Download Result Image",
+                                                data=img_bytes,
+                                                file_name=f"{base_name}_detections.png",
+                                                mime="image/png",
+                                                key=f"download_img_{idx}"
+                                            )
+                                        else:
+                                            st.image(result["image"], caption=f"Original: {result['image_name']}", use_column_width=True)
+                                            st.info("No ants detected in this image.")
                                     
                                     with col2:
-                                        st.write(f"**Detection Statistics:**")
-                                        st.write(f"- Detections found: {len(boxes)}")
-                                        st.write(f"- Avg confidence: {np.mean(scores):.3f}")
-                                        st.write(f"- Min confidence: {min(scores):.3f}")
-                                        st.write(f"- Max confidence: {max(scores):.3f}")
-                                        if all_detections:
-                                            st.write(f"- Total before overlap removal: {len(all_detections)}")
-                                    
-                                    # Score distribution
-                                    if len(scores) > 1:
-                                        st.subheader("Score Distribution")
-                                        fig, ax = plt.subplots(figsize=(8, 4))
-                                        ax.hist(scores, bins=min(10, len(scores)), alpha=0.7)
+                                        st.write("**Detection Summary:**")
+                                        st.write(f"• Ants found: {result['ant_count']}")
+                                        
+                                        if result["scores"]:
+                                            st.write(f"• Avg confidence: {np.mean(result['scores']):.3f}")
+                                            st.write(f"• Best confidence: {max(result['scores']):.3f}")
+                                            
+                                            # Individual detection details
+                                            st.write("**Individual Detections:**")
+                                            for i, (box, score) in enumerate(zip(result["boxes"], result["scores"])):
+                                                x1, y1, x2, y2 = [int(coord) for coord in box]
+                                                st.write(f"{i+1}. Confidence: {score:.3f}")
+                                                st.write(f"   Position: ({x1},{y1}) to ({x2},{y2})")
+                                                st.write(f"   Size: {x2-x1}×{y2-y1} px")
+                                        
+                                        # Show all detections option for individual images
+                                        if show_all_detections and result["all_detections"]:
+                                            st.write(f"**All detections found:** {len(result['all_detections'])}")
+                                            all_scores_img = [det['score'] for det in result["all_detections"]]
+                                            st.write(f"• Before overlap removal: {len(all_scores_img)}")
+                                            if all_scores_img:
+                                                st.write(f"• Score range: {min(all_scores_img):.3f} - {max(all_scores_img):.3f}")
+                            
+                            # Batch statistics
+                            if len(all_results) > 1:
+                                st.subheader("📈 Batch Statistics")
+                                
+                                # Collect all detection data
+                                all_ant_counts = [r["ant_count"] for r in all_results]
+                                all_scores_batch = []
+                                for r in all_results:
+                                    all_scores_batch.extend(r["scores"])
+                                
+                                col1, col2 = st.columns(2)
+                                
+                                with col1:
+                                    # Ant count distribution
+                                    fig, ax = plt.subplots(figsize=(8, 5))
+                                    ax.hist(all_ant_counts, bins=range(max(all_ant_counts) + 2), alpha=0.7, edgecolor='black')
+                                    ax.set_xlabel("Number of Ants per Image")
+                                    ax.set_ylabel("Number of Images") 
+                                    ax.set_title("Distribution of Ant Counts Across Images")
+                                    ax.grid(True, alpha=0.3)
+                                    st.pyplot(fig)
+                                
+                                with col2:
+                                    if all_scores_batch:
+                                        # Confidence score distribution
+                                        fig, ax = plt.subplots(figsize=(8, 5))
+                                        ax.hist(all_scores_batch, bins=20, alpha=0.7, edgecolor='black')
                                         ax.axvline(x=confidence_threshold, color='r', linestyle='--', 
                                                  label=f'Threshold ({confidence_threshold})')
                                         ax.set_xlabel("Confidence Score")
                                         ax.set_ylabel("Number of Detections")
-                                        ax.set_title("Final Detection Scores")
+                                        ax.set_title("Distribution of All Confidence Scores")
                                         ax.legend()
+                                        ax.grid(True, alpha=0.3)
                                         st.pyplot(fig)
-                            
-                            except Exception as e:
-                                st.error(f"Error during detection: {e}")
-                                import traceback
-                                st.error(traceback.format_exc())
-                else:
-                    st.warning("Please load a model first.")
+                                
+                                # Summary statistics
+                                st.write("**Batch Summary Statistics:**")
+                                col1, col2, col3 = st.columns(3)
+                                
+                                with col1:
+                                    st.write(f"• Images with 0 ants: {sum(1 for x in all_ant_counts if x == 0)}")
+                                    st.write(f"• Images with 1+ ants: {sum(1 for x in all_ant_counts if x > 0)}")
+                                    st.write(f"• Max ants in single image: {max(all_ant_counts)}")
+                                
+                                with col2:
+                                    st.write(f"• Mean ants per image: {np.mean(all_ant_counts):.2f}")
+                                    st.write(f"• Median ants per image: {np.median(all_ant_counts):.1f}")
+                                    st.write(f"• Std deviation: {np.std(all_ant_counts):.2f}")
+                                
+                                with col3:
+                                    if all_scores_batch:
+                                        st.write(f"• Mean confidence: {np.mean(all_scores_batch):.3f}")
+                                        st.write(f"• Min confidence: {min(all_scores_batch):.3f}")
+                                        st.write(f"• Max confidence: {max(all_scores_batch):.3f}")
+                        
+                        except Exception as e:
+                            st.error(f"Error during batch detection: {e}")
+                            import traceback
+                            st.error(traceback.format_exc())
             else:
-                st.error("Failed to load image.")
-                # Clean up the temporary file even if loading failed
-                try:
-                    os.unlink(temp_filename)
-                except:
-                    pass
+                st.warning("Please load a model first.")
         
-        # Help information
-        with st.expander("🔍 Detection Tips for Best Results"):
+        # Help information for batch processing
+        with st.expander("🔍 Batch Detection Tips"):
             st.write("""
-            #### Getting the Best Detection Results
+            #### Batch Processing Features
             
-            **1. Confidence Threshold**
-            - Start with 0.5-0.7 for balanced results
-            - Lower to 0.3-0.4 if missing ants
-            - Raise to 0.8-0.9 if too many false positives
+            **📁 Multiple Image Upload:**
+            - Select multiple images by holding Ctrl/Cmd while clicking
+            - Supported formats: JPG, JPEG, PNG
+            - Process up to 50 images efficiently
             
-            **2. Image Quality Tips**
-            - Use well-lit images with good contrast
-            - Ants should be clearly visible against the background
-            - Avoid blurry or very dark images
+            **📊 Results Export:**
+            - Download detailed CSV with all detection coordinates
+            - Individual result images with bounding boxes
+            - Comprehensive statistics across all images
             
-            **3. If Ants Are Being Missed:**
-            - Turn off "Fast Detection Mode"
-            - Lower the confidence threshold
-            - Check if your training data included similar-sized ants
+            **⚡ Performance Tips:**
+            - Enable "Fast Detection Mode" for quicker processing
+            - Larger batches benefit more from fast mode
+            - Consider processing very large batches in smaller groups
             
-            **4. If Getting Too Many False Positives:**
-            - Increase the confidence threshold
-            - Lower the overlap removal threshold
-            - Ensure training data has diverse background examples
+            **📈 Batch Analysis:**
+            - Automatic statistics on ant distribution
+            - Confidence score analysis across all detections
+            - Per-image and aggregate summaries
             
-            **5. Model Performance:**
-            - Random Forest works best with consistent ant sizes
-            - Train with 10-20 diverse images for best results
-            - Include various backgrounds in training data
+            **💾 Data Export Includes:**
+            - Image name and detection coordinates
+            - Confidence scores for each detection
+            - Bounding box dimensions and center points
+            - Unique detection IDs for tracking
             """)
 
 # ---------------------------
