@@ -38,9 +38,9 @@ st_image.image_to_url = image_to_url
 # Global Folders Setup
 # ---------------------------
 if not os.path.exists("models"):
-    os.makedirs("models")
+    os.makedirs("models", exist_ok=True)
 if not os.path.exists("training_data"):
-    os.makedirs("training_data")
+    os.makedirs("training_data", exist_ok=True)
 
 # ---------------------------
 # Random Forest Ant Detector Class
