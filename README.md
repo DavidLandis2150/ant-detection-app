@@ -3,7 +3,7 @@
 An intelligent application for detecting and counting ants in images using 
 machine learning.
 
-## 📥 Installation (Easy - 2 Steps!)
+## 📥 Installation (Easy - 3 Steps!)
 
 ### For Mac Users:
 
@@ -12,7 +12,10 @@ machine learning.
    - Get version 3.8 or higher
    - During install, check "Add Python to PATH"
 
-2. **Run the application**:
+2. **Download required files**
+   - Download ant_detection_app, install_and_run, and requirements files from this repository and save them in the same location/file.
+  
+3. **Run the application**:
    - Double-click `install_and_run.py`
    - The first time takes 2-3 minutes to install packages
    - After that, it launches instantly!
@@ -24,7 +27,10 @@ machine learning.
    - Get version 3.8 or higher
    - **IMPORTANT:** Check "Add Python to PATH" during installation
 
-2. **Run the application**:
+2. **Download required files**
+   - Download ant_detection_app, install_and_run, and requirements files from this repository and save them in the same location/file.
+  
+3. **Run the application**:
    - Double-click `install_and_run.py`
    - The first time takes 2-3 minutes to install packages
    - After that, it launches instantly!
