@@ -336,7 +336,7 @@ class RandomForestAntDetector:
         
         return X, y
     
-    def train_model(self, images, annotations, tune_hyperparameters=True, progress_callback=None):
+    def train_model(self, images, annotations, tune_hyperparameters=True, hyperparam_ranges=None, progress_callback=None):
         """Train model with hyperparameter tuning - matches original"""
         try:
             # Validate inputs
@@ -364,13 +364,17 @@ class RandomForestAntDetector:
             
             # Train model
             if tune_hyperparameters:
-                param_distributions = {
-                    'n_estimators': [25, 50, min(75, self.rf_params['n_estimators'])],
-                    'max_depth': [6, 8, 10],
-                    'min_samples_split': [5, 10, 20],
-                    'min_samples_leaf': [2, 4, 8],
-                    'max_features': ['sqrt', 'log2']
-                }
+                # Use custom ranges if provided, otherwise use defaults
+                if hyperparam_ranges is None:
+                    param_distributions = {
+                        'n_estimators': [25, 50, min(75, self.rf_params['n_estimators'])],
+                        'max_depth': [6, 8, 10],
+                        'min_samples_split': [5, 10, 20],
+                        'min_samples_leaf': [2, 4, 8],
+                        'max_features': ['sqrt', 'log2']
+                    }
+                else:
+                    param_distributions = hyperparam_ranges
                 
                 rf = RandomForestClassifier(random_state=42, n_jobs=1, bootstrap=True)
                 cv_folds = min(3, max(2, len(X) // 100))
@@ -1443,18 +1447,83 @@ Instructions:
         ttk.Label(control_frame, text="Model Parameters:", style='Heading.TLabel').grid(row=13, column=0, columnspan=2, sticky=tk.W, pady=5)
         
         self.tune_hyperparams_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(control_frame, text="Auto-tune Hyperparameters (Recommended)", 
-                       variable=self.tune_hyperparams_var).grid(row=14, column=0, columnspan=2, sticky=tk.W, pady=2)
+        tune_check = ttk.Checkbutton(control_frame, text="Auto-tune Hyperparameters (Recommended)", 
+                       variable=self.tune_hyperparams_var,
+                       command=self.toggle_hyperparam_controls)
+        tune_check.grid(row=14, column=0, columnspan=2, sticky=tk.W, pady=2)
         
-        # Info about hyperparameter tuning
-        tuning_info = """Hyperparameter tuning will automatically optimize:
-- Number of trees (25-100)
-- Maximum depth (6-15)
-- Minimum samples for split/leaf
-- Feature selection method"""
+        # Hyperparameter ranges frame (collapsible)
+        self.hyperparam_frame = ttk.LabelFrame(control_frame, text="Hyperparameter Tuning Ranges", padding="5")
+        self.hyperparam_frame.grid(row=15, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
         
-        info_label = ttk.Label(control_frame, text=tuning_info, style='Info.TLabel', justify=tk.LEFT)
-        info_label.grid(row=15, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
+        # Number of trees (n_estimators)
+        ttk.Label(self.hyperparam_frame, text="Number of Trees:", style='Info.TLabel').grid(row=0, column=0, sticky=tk.W, pady=2)
+        trees_frame = ttk.Frame(self.hyperparam_frame)
+        trees_frame.grid(row=0, column=1, sticky=(tk.W, tk.E), pady=2)
+        
+        self.trees_min_var = tk.IntVar(value=25)
+        self.trees_max_var = tk.IntVar(value=75)
+        ttk.Label(trees_frame, text="Min:", style='Info.TLabel').pack(side=tk.LEFT, padx=(0, 2))
+        ttk.Entry(trees_frame, textvariable=self.trees_min_var, width=6).pack(side=tk.LEFT, padx=2)
+        ttk.Label(trees_frame, text="Max:", style='Info.TLabel').pack(side=tk.LEFT, padx=(10, 2))
+        ttk.Entry(trees_frame, textvariable=self.trees_max_var, width=6).pack(side=tk.LEFT, padx=2)
+        
+        # Maximum depth
+        ttk.Label(self.hyperparam_frame, text="Maximum Depth:", style='Info.TLabel').grid(row=1, column=0, sticky=tk.W, pady=2)
+        depth_frame = ttk.Frame(self.hyperparam_frame)
+        depth_frame.grid(row=1, column=1, sticky=(tk.W, tk.E), pady=2)
+        
+        self.depth_min_var = tk.IntVar(value=6)
+        self.depth_max_var = tk.IntVar(value=10)
+        ttk.Label(depth_frame, text="Min:", style='Info.TLabel').pack(side=tk.LEFT, padx=(0, 2))
+        ttk.Entry(depth_frame, textvariable=self.depth_min_var, width=6).pack(side=tk.LEFT, padx=2)
+        ttk.Label(depth_frame, text="Max:", style='Info.TLabel').pack(side=tk.LEFT, padx=(10, 2))
+        ttk.Entry(depth_frame, textvariable=self.depth_max_var, width=6).pack(side=tk.LEFT, padx=2)
+        
+        # Minimum samples for split
+        ttk.Label(self.hyperparam_frame, text="Min Samples Split:", style='Info.TLabel').grid(row=2, column=0, sticky=tk.W, pady=2)
+        split_frame = ttk.Frame(self.hyperparam_frame)
+        split_frame.grid(row=2, column=1, sticky=(tk.W, tk.E), pady=2)
+        
+        self.split_min_var = tk.IntVar(value=5)
+        self.split_max_var = tk.IntVar(value=20)
+        ttk.Label(split_frame, text="Min:", style='Info.TLabel').pack(side=tk.LEFT, padx=(0, 2))
+        ttk.Entry(split_frame, textvariable=self.split_min_var, width=6).pack(side=tk.LEFT, padx=2)
+        ttk.Label(split_frame, text="Max:", style='Info.TLabel').pack(side=tk.LEFT, padx=(10, 2))
+        ttk.Entry(split_frame, textvariable=self.split_max_var, width=6).pack(side=tk.LEFT, padx=2)
+        
+        # Minimum samples for leaf
+        ttk.Label(self.hyperparam_frame, text="Min Samples Leaf:", style='Info.TLabel').grid(row=3, column=0, sticky=tk.W, pady=2)
+        leaf_frame = ttk.Frame(self.hyperparam_frame)
+        leaf_frame.grid(row=3, column=1, sticky=(tk.W, tk.E), pady=2)
+        
+        self.leaf_min_var = tk.IntVar(value=2)
+        self.leaf_max_var = tk.IntVar(value=8)
+        ttk.Label(leaf_frame, text="Min:", style='Info.TLabel').pack(side=tk.LEFT, padx=(0, 2))
+        ttk.Entry(leaf_frame, textvariable=self.leaf_min_var, width=6).pack(side=tk.LEFT, padx=2)
+        ttk.Label(leaf_frame, text="Max:", style='Info.TLabel').pack(side=tk.LEFT, padx=(10, 2))
+        ttk.Entry(leaf_frame, textvariable=self.leaf_max_var, width=6).pack(side=tk.LEFT, padx=2)
+        
+        # Feature selection methods
+        ttk.Label(self.hyperparam_frame, text="Max Features:", style='Info.TLabel').grid(row=4, column=0, sticky=tk.W, pady=2)
+        features_frame = ttk.Frame(self.hyperparam_frame)
+        features_frame.grid(row=4, column=1, sticky=(tk.W, tk.E), pady=2)
+        
+        self.features_sqrt_var = tk.BooleanVar(value=True)
+        self.features_log2_var = tk.BooleanVar(value=True)
+        ttk.Checkbutton(features_frame, text="sqrt", variable=self.features_sqrt_var).pack(side=tk.LEFT, padx=5)
+        ttk.Checkbutton(features_frame, text="log2", variable=self.features_log2_var).pack(side=tk.LEFT, padx=5)
+        
+        # Info about what these parameters mean
+        info_text = """Parameter Explanations:
+• Number of Trees: More trees = better performance but slower
+• Max Depth: How deep each tree can grow (higher = more complex)
+• Min Samples Split: Min samples needed to split a node
+• Min Samples Leaf: Min samples required at leaf nodes
+• Max Features: How to select features for each split"""
+        
+        info_label = ttk.Label(self.hyperparam_frame, text=info_text, style='Info.TLabel', justify=tk.LEFT)
+        info_label.grid(row=5, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=5)
         
         # Training controls
         ttk.Button(control_frame, text="Train Model", command=self.train_model).grid(row=16, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=10)
@@ -1475,6 +1544,15 @@ Instructions:
         
         # Right panel - Results
         self.create_training_results_panel(training_frame, 0, 1)
+    
+    def toggle_hyperparam_controls(self):
+        """Toggle visibility of hyperparameter range controls"""
+        if self.tune_hyperparams_var.get():
+            # Show the hyperparameter frame
+            self.hyperparam_frame.grid()
+        else:
+            # Hide the hyperparameter frame
+            self.hyperparam_frame.grid_remove()
     
     def create_training_results_panel(self, parent, row, column):
         """Create training results panel"""
@@ -1660,20 +1738,6 @@ Instructions:
         # Initialize distance threshold
         self.pred_distance_var = tk.DoubleVar(value=0.05)
         self.setup_pred_distance_ui()
-        
-        # Fast detection mode
-        self.pred_fast_mode_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(control_panel, text="Fast Detection Mode", 
-                       variable=self.pred_fast_mode_var).grid(
-            row=current_row, column=0, columnspan=2, sticky=tk.W, pady=2)
-        current_row += 1
-        
-        # Show all detections
-        self.show_all_detections_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(control_panel, text="Show All Detections (Before NMS)", 
-                       variable=self.show_all_detections_var).grid(
-            row=current_row, column=0, columnspan=2, sticky=tk.W, pady=2)
-        current_row += 1
         
         # Detection color
         color_frame = ttk.Frame(control_panel)
@@ -2583,6 +2647,47 @@ Instructions:
         # Get hyperparameter tuning setting
         tune_hyperparams = self.tune_hyperparams_var.get()
         
+        # Get custom hyperparameter ranges if tuning is enabled
+        hyperparam_ranges = None
+        if tune_hyperparams:
+            # Collect ranges from UI
+            trees_values = list(range(self.trees_min_var.get(), self.trees_max_var.get() + 1, 
+                                     max(1, (self.trees_max_var.get() - self.trees_min_var.get()) // 2)))
+            if len(trees_values) > 3:
+                trees_values = [trees_values[0], trees_values[len(trees_values)//2], trees_values[-1]]
+            
+            depth_values = list(range(self.depth_min_var.get(), self.depth_max_var.get() + 1,
+                                     max(1, (self.depth_max_var.get() - self.depth_min_var.get()) // 2)))
+            if len(depth_values) > 3:
+                depth_values = [depth_values[0], depth_values[len(depth_values)//2], depth_values[-1]]
+            
+            split_values = list(range(self.split_min_var.get(), self.split_max_var.get() + 1,
+                                     max(1, (self.split_max_var.get() - self.split_min_var.get()) // 2)))
+            if len(split_values) > 3:
+                split_values = [split_values[0], split_values[len(split_values)//2], split_values[-1]]
+            
+            leaf_values = list(range(self.leaf_min_var.get(), self.leaf_max_var.get() + 1,
+                                    max(1, (self.leaf_max_var.get() - self.leaf_min_var.get()) // 2)))
+            if len(leaf_values) > 3:
+                leaf_values = [leaf_values[0], leaf_values[len(leaf_values)//2], leaf_values[-1]]
+            
+            # Build feature selection options
+            max_features = []
+            if self.features_sqrt_var.get():
+                max_features.append('sqrt')
+            if self.features_log2_var.get():
+                max_features.append('log2')
+            if not max_features:  # If nothing selected, use sqrt as default
+                max_features = ['sqrt']
+            
+            hyperparam_ranges = {
+                'n_estimators': trees_values,
+                'max_depth': depth_values,
+                'min_samples_split': split_values,
+                'min_samples_leaf': leaf_values,
+                'max_features': max_features
+            }
+        
         # Clear previous training log
         self.training_log.delete(1.0, tk.END)
         
@@ -2635,6 +2740,7 @@ Instructions:
                     images, 
                     annotations_list, 
                     tune_hyperparameters=tune_hyperparams,
+                    hyperparam_ranges=hyperparam_ranges,
                     progress_callback=progress_callback
                 )
                 
@@ -3351,7 +3457,7 @@ RECOMMENDATIONS
         confidence_threshold = self.test_confidence_var.get()
         distance_threshold = self.test_distance_var.get()
         use_normalized_distance = self.test_normalized_var.get()
-        self.detector.fast_mode = self.test_fast_mode_var.get()
+        # Note: fast_mode uses the value from training parameters
         
         # Create evaluation results window
         eval_window = tk.Toplevel(self.root)
@@ -3727,21 +3833,6 @@ RECOMMENDATIONS
         
         # Additional test parameters
         ttk.Separator(control_frame, orient='horizontal').grid(row=current_row, column=0, columnspan=2, sticky=(tk.W, tk.E), pady=10)
-        current_row += 1
-        
-        ttk.Label(control_frame, text="Additional Parameters:", style='Heading.TLabel').grid(row=current_row, column=0, columnspan=2, sticky=tk.W, pady=5)
-        current_row += 1
-        
-        # Fast detection mode
-        self.test_fast_mode_var = tk.BooleanVar(value=True)
-        ttk.Checkbutton(control_frame, text="Fast Detection Mode", 
-                       variable=self.test_fast_mode_var).grid(row=current_row, column=0, columnspan=2, sticky=tk.W, pady=2)
-        current_row += 1
-        
-        # Show detailed visualization option
-        self.show_detailed_viz_var = tk.BooleanVar(value=False)
-        ttk.Checkbutton(control_frame, text="Show Detailed Visualizations", 
-                       variable=self.show_detailed_viz_var).grid(row=current_row, column=0, columnspan=2, sticky=tk.W, pady=2)
         current_row += 1
         
         # Evaluation controls
@@ -4300,11 +4391,9 @@ INTERPRETATION GUIDE
         confidence_threshold = self.pred_confidence_var.get()
         distance_threshold = self.pred_distance_var.get()
         use_normalized_distance = self.pred_normalized_var.get()
-        fast_mode = self.pred_fast_mode_var.get()
-        show_all_detections = self.show_all_detections_var.get()
-        
-        # Set detector fast mode
-        self.detector.fast_mode = fast_mode
+        # Note: fast_mode uses the value from training parameters
+        # Always show detailed visualizations (all detections after NMS)
+        show_all_detections = False  # Always use NMS results only
         
         # Get detection color (convert hex to RGB)
         color_hex = self.detection_color_var.get()
@@ -4422,7 +4511,7 @@ INTERPRETATION GUIDE
                     "confidence_threshold": confidence_threshold,
                     "distance_threshold": distance_threshold,
                     "use_normalized_distance": use_normalized_distance,
-                    "fast_mode": fast_mode,
+                    "fast_mode": self.detector.fast_mode,  # Use training parameter
                     "show_all_detections": show_all_detections,
                     "detection_color_rgb": detection_color_rgb
                 }
