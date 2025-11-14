@@ -13,10 +13,10 @@ machine learning.
    - During install, check "Add Python to PATH"
 
 2. **Download required files**
-   - Download ant_detection_app, install_and_run, and requirements files from this repository and save them in the same location/file.
+   - Download ant_detection_app, install_and_run, requirements, and run_ant_detector files from this repository and save them in the same location/file.
   
 3. **Run the application**:
-   - Double-click `install_and_run.py`
+   - Double-click `run_ant_detector.command`
    - The first time takes 2-3 minutes to install packages
    - After that, it launches instantly!
 
@@ -28,10 +28,10 @@ machine learning.
    - **IMPORTANT:** Check "Add Python to PATH" during installation
 
 2. **Download required files**
-   - Download ant_detection_app, install_and_run, and requirements files from this repository and save them in the same location/file.
+   - Download ant_detection_app, install_and_run, requirements, and run_ant_detector files from this repository and save them in the same location/file.
   
 3. **Run the application**:
-   - Double-click `install_and_run.py`
+   - Double-click `run_ant_detector.command`
    - The first time takes 2-3 minutes to install packages
    - After that, it launches instantly!
 
@@ -60,8 +60,21 @@ machine learning.
 ## ❓ Troubleshooting
 
 **App doesn't open when double-clicking?**
-- Right-click `install_and_run.py` → "Open With" → "Python Launcher"
-- Or open Terminal/Command Prompt and run: `python install_and_run.py`
+**Option 1: Fix the permissions**
+1. Open Terminal (press `Cmd + Space`, type "terminal", press Enter)
+2. Type: `cd ` (with a space after cd)
+3. Drag the `ant-detection-distribution` folder into Terminal
+4. Press Enter
+5. Type: `chmod +x run_ant_detector.command` and press Enter
+6. Now double-click `run_ant_detector.command` again
+
+**Option 2: Run from Terminal directly**
+1. Open Terminal
+2. Type: `cd ` (with a space after cd)
+3. Drag the `ant-detection-distribution` folder into Terminal
+4. Press Enter
+5. Type: `python3 install_and_run.py` and press Enter
+
 
 **"Python not found" error?**
 - Make sure you installed Python and checked "Add to PATH"
@@ -73,4 +86,4 @@ machine learning.
 
 ## 📧 Support
 
-For issues or questions, contact [your email here]
+For issues or questions, contact davidlandis2150@gmail.com
