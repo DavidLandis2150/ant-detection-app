@@ -72,6 +72,11 @@ machine learning.
 **App doesn't open when double-clicking?**
 
 **Option 1: Fix the permissions**
+1. Right Click `run_ant_detector.command`
+2. Select "Open"
+3. Confirm you want to open when the warning label pops up
+
+**Option 2: Fix the permissions**
 1. Open Terminal (press `Cmd + Space`, type "terminal", press Enter)
 2. Type: `cd ` (with a space after cd)
 3. Drag the folder containing your files into Terminal
@@ -79,7 +84,7 @@ machine learning.
 5. Type: `chmod +x run_ant_detector.command` and press Enter
 6. Now double-click `run_ant_detector.command` again
 
-**Option 2: Run from Terminal directly**
+**Option 3: Run from Terminal directly**
 1. Open Terminal
 2. Type: `cd ` (with a space after cd)
 3. Drag the folder containing your files into Terminal
