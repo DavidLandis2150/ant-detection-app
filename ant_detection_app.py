@@ -1390,18 +1390,26 @@ Instructions:
         control_container = ttk.LabelFrame(training_frame, text="Training Controls", padding="5")
         control_container.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=5)
         
-        # Create canvas and scrollbar for control panel
-        control_canvas = tk.Canvas(control_container, width=330, highlightthickness=0, bg=self.colors['bg'])
-        control_scrollbar = ttk.Scrollbar(control_container, orient="vertical", command=control_canvas.yview)
+        # Create outer frame to hold canvas and scrollbars
+        control_outer_frame = ttk.Frame(control_container)
+        control_outer_frame.pack(fill=tk.BOTH, expand=True)
+        control_outer_frame.columnconfigure(0, weight=1)
+        control_outer_frame.rowconfigure(0, weight=1)
+        
+        # Create canvas and scrollbars for control panel
+        control_canvas = tk.Canvas(control_outer_frame, width=330, highlightthickness=0, bg=self.colors['bg'])
+        v_scrollbar = ttk.Scrollbar(control_outer_frame, orient="vertical", command=control_canvas.yview)
+        h_scrollbar = ttk.Scrollbar(control_outer_frame, orient="horizontal", command=control_canvas.xview)
         control_frame = ttk.Frame(control_canvas, style='TFrame')
         control_frame.configure(padding="5")
         
         # Configure canvas
-        control_canvas.configure(yscrollcommand=control_scrollbar.set)
+        control_canvas.configure(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
         
-        # Pack scrollbar and canvas
-        control_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        control_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        # Grid layout for canvas and scrollbars
+        control_canvas.grid(row=0, column=0, sticky=(tk.N, tk.S, tk.E, tk.W))
+        v_scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
+        h_scrollbar.grid(row=1, column=0, sticky=(tk.E, tk.W))
         
         # Create window in canvas for the frame
         canvas_window = control_canvas.create_window((0, 0), window=control_frame, anchor=tk.NW)
@@ -1412,15 +1420,21 @@ Instructions:
         
         control_frame.bind("<Configure>", configure_scroll_region)
         
-        # Bind mousewheel to scroll
+        # Bind mousewheel to scroll (vertical)
         def on_mousewheel(event):
             control_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
         
+        # Bind shift+mousewheel to scroll horizontally
+        def on_shift_mousewheel(event):
+            control_canvas.xview_scroll(int(-1*(event.delta/120)), "units")
+        
         def bind_mousewheel(event):
             control_canvas.bind_all("<MouseWheel>", on_mousewheel)
+            control_canvas.bind_all("<Shift-MouseWheel>", on_shift_mousewheel)
         
         def unbind_mousewheel(event):
             control_canvas.unbind_all("<MouseWheel>")
+            control_canvas.unbind_all("<Shift-MouseWheel>")
         
         control_container.bind('<Enter>', bind_mousewheel)
         control_container.bind('<Leave>', unbind_mousewheel)
@@ -1723,18 +1737,26 @@ Instructions:
         control_panel_container = ttk.LabelFrame(pred_frame, text="Detection Controls", padding="5")
         control_panel_container.grid(row=0, column=0, sticky=(tk.N, tk.S, tk.W), padx=(0, 10))
         
-        # Create canvas and scrollbar for control panel
-        control_canvas = tk.Canvas(control_panel_container, width=330, highlightthickness=0, bg=self.colors['bg'])
-        control_scrollbar = ttk.Scrollbar(control_panel_container, orient="vertical", command=control_canvas.yview)
+        # Create outer frame to hold canvas and scrollbars
+        control_outer_frame = ttk.Frame(control_panel_container)
+        control_outer_frame.pack(fill=tk.BOTH, expand=True)
+        control_outer_frame.columnconfigure(0, weight=1)
+        control_outer_frame.rowconfigure(0, weight=1)
+        
+        # Create canvas and scrollbars for control panel
+        control_canvas = tk.Canvas(control_outer_frame, width=330, highlightthickness=0, bg=self.colors['bg'])
+        v_scrollbar = ttk.Scrollbar(control_outer_frame, orient="vertical", command=control_canvas.yview)
+        h_scrollbar = ttk.Scrollbar(control_outer_frame, orient="horizontal", command=control_canvas.xview)
         control_panel = ttk.Frame(control_canvas, style='TFrame')
         control_panel.configure(padding="5")
         
         # Configure canvas
-        control_canvas.configure(yscrollcommand=control_scrollbar.set)
+        control_canvas.configure(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
         
-        # Pack scrollbar and canvas
-        control_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        control_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        # Grid layout for canvas and scrollbars
+        control_canvas.grid(row=0, column=0, sticky=(tk.N, tk.S, tk.E, tk.W))
+        v_scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
+        h_scrollbar.grid(row=1, column=0, sticky=(tk.E, tk.W))
         
         # Create window in canvas for the frame
         canvas_window = control_canvas.create_window((0, 0), window=control_panel, anchor=tk.NW)
@@ -1745,15 +1767,21 @@ Instructions:
         
         control_panel.bind("<Configure>", configure_scroll_region)
         
-        # Bind mousewheel to scroll
+        # Bind mousewheel to scroll (vertical)
         def on_mousewheel(event):
             control_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
         
+        # Bind shift+mousewheel to scroll horizontally
+        def on_shift_mousewheel(event):
+            control_canvas.xview_scroll(int(-1*(event.delta/120)), "units")
+        
         def bind_mousewheel(event):
             control_canvas.bind_all("<MouseWheel>", on_mousewheel)
+            control_canvas.bind_all("<Shift-MouseWheel>", on_shift_mousewheel)
         
         def unbind_mousewheel(event):
             control_canvas.unbind_all("<MouseWheel>")
+            control_canvas.unbind_all("<Shift-MouseWheel>")
         
         control_panel_container.bind('<Enter>', bind_mousewheel)
         control_panel_container.bind('<Leave>', unbind_mousewheel)
@@ -3851,18 +3879,26 @@ RECOMMENDATIONS
         control_container = ttk.LabelFrame(testing_frame, text="Testing Controls", padding="5")
         control_container.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S), padx=5)
         
-        # Create canvas and scrollbar for control panel
-        control_canvas = tk.Canvas(control_container, width=330, highlightthickness=0, bg=self.colors['bg'])
-        control_scrollbar = ttk.Scrollbar(control_container, orient="vertical", command=control_canvas.yview)
+        # Create outer frame to hold canvas and scrollbars
+        control_outer_frame = ttk.Frame(control_container)
+        control_outer_frame.pack(fill=tk.BOTH, expand=True)
+        control_outer_frame.columnconfigure(0, weight=1)
+        control_outer_frame.rowconfigure(0, weight=1)
+        
+        # Create canvas and scrollbars for control panel
+        control_canvas = tk.Canvas(control_outer_frame, width=330, highlightthickness=0, bg=self.colors['bg'])
+        v_scrollbar = ttk.Scrollbar(control_outer_frame, orient="vertical", command=control_canvas.yview)
+        h_scrollbar = ttk.Scrollbar(control_outer_frame, orient="horizontal", command=control_canvas.xview)
         control_frame = ttk.Frame(control_canvas, style='TFrame')
         control_frame.configure(padding="5")
         
         # Configure canvas
-        control_canvas.configure(yscrollcommand=control_scrollbar.set)
+        control_canvas.configure(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
         
-        # Pack scrollbar and canvas
-        control_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        control_canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        # Grid layout for canvas and scrollbars
+        control_canvas.grid(row=0, column=0, sticky=(tk.N, tk.S, tk.E, tk.W))
+        v_scrollbar.grid(row=0, column=1, sticky=(tk.N, tk.S))
+        h_scrollbar.grid(row=1, column=0, sticky=(tk.E, tk.W))
         
         # Create window in canvas for the frame
         canvas_window = control_canvas.create_window((0, 0), window=control_frame, anchor=tk.NW)
@@ -3873,15 +3909,21 @@ RECOMMENDATIONS
         
         control_frame.bind("<Configure>", configure_scroll_region)
         
-        # Bind mousewheel to scroll
+        # Bind mousewheel to scroll (vertical)
         def on_mousewheel(event):
             control_canvas.yview_scroll(int(-1*(event.delta/120)), "units")
         
+        # Bind shift+mousewheel to scroll horizontally
+        def on_shift_mousewheel(event):
+            control_canvas.xview_scroll(int(-1*(event.delta/120)), "units")
+        
         def bind_mousewheel(event):
             control_canvas.bind_all("<MouseWheel>", on_mousewheel)
+            control_canvas.bind_all("<Shift-MouseWheel>", on_shift_mousewheel)
         
         def unbind_mousewheel(event):
             control_canvas.unbind_all("<MouseWheel>")
+            control_canvas.unbind_all("<Shift-MouseWheel>")
         
         control_container.bind('<Enter>', bind_mousewheel)
         control_container.bind('<Leave>', unbind_mousewheel)
